@@ -256,7 +256,7 @@ function parseText(raw, nameHint){
 }
 
 /* ---------- näkymät ---------- */
-let view={v:'home'}, useHist=true, sheetOpen=false, afterClose=null, filter='all', reorder=false;
+let view={v:'home'}, useHist=true, sheetOpen=false, afterClose=null, filter='all', reorder=false, homeReorder=false;
 const openSet=new Set(); // auki olevat pääkohdat (vain tämän käyttökerran ajan)
 try{ if(window.top!==window) useHist=false; }catch(e){ useHist=false; }
 if(useHist){ try{ history.replaceState({v:'home'},''); }catch(e){ useHist=false; } }
@@ -275,9 +275,51 @@ function render(){
   if(view.v==='list' && store.lists[view.id]) renderList(); else { view={v:'home'}; reorder=false; renderHome(); }
 }
 
+function renderHomeReorder(ls){
+  $('#app').innerHTML=`<header><div class="topbar"><div class="label">Omat listat</div><button class="btn primary" id="roDone" style="padding:9px 18px">Valmis</button></div>
+    <div class="total">Järjestä</div></header>
+    <p class="rohint">Vedä listaa oikean reunan ≡-kahvasta uuteen paikkaan.</p>
+    <div id="homeList">${ls.map(l=>`<div class="card" data-sort="${l.id}" style="cursor:default"><div class="grow"><div class="name">${esc(l.name)}</div></div>
+      <button class="grip" data-grip aria-label="Vedä siirtääksesi">${ICON.grip}</button></div>`).join('')}</div>`;
+  $('#fab').hidden=true;
+  $('#roDone').onclick=()=>{ homeReorder=false; renderHome(); };
+  const box=$('#homeList');
+  box.addEventListener('pointerdown',e=>{
+    const g=e.target.closest('[data-grip]'); if(!g) return;
+    e.preventDefault();
+    sortDrag(e, g.closest('[data-sort]'), box, '[data-sort]', ()=>{
+      [...box.querySelectorAll('[data-sort]')].forEach((el,i)=>{ const L=store.lists[el.dataset.sort]; if(L) L.order=i+1; });
+      persist();
+    });
+  });
+}
+// Yleinen vedettävä järjestäminen yhden tason elementeille
+function sortDrag(e,el,box,sel,onDrop){
+  const grab=e.clientY-el.getBoundingClientRect().top;
+  let py=e.clientY, raf=0, active=true;
+  el.classList.add('dragging'); document.body.classList.add('noselect');
+  const tick=()=>{ if(!active) return;
+    const vh=window.innerHeight, dy= py<80 ? -12 : py>vh-90 ? 12 : 0;
+    if(dy) window.scrollBy(0,dy);
+    el.style.transform='';
+    let before=null;
+    for(const x of box.querySelectorAll(sel)){ if(x===el) continue; const r=x.getBoundingClientRect(); if(py<r.top+r.height/2){ before=x; break; } }
+    if(before){ if(el.nextElementSibling!==before) box.insertBefore(el,before); } else if(box.lastElementChild!==el) box.appendChild(el);
+    const top=el.getBoundingClientRect().top; el.style.transform=`translateY(${py-grab-top}px)`;
+    raf=requestAnimationFrame(tick); };
+  const move=ev=>{ py=ev.clientY; if(ev.cancelable) ev.preventDefault(); };
+  const end=()=>{ active=false; cancelAnimationFrame(raf);
+    window.removeEventListener('pointermove',move); window.removeEventListener('pointerup',end); window.removeEventListener('pointercancel',end);
+    el.style.transform=''; el.classList.remove('dragging'); document.body.classList.remove('noselect'); onDrop(); };
+  window.addEventListener('pointermove',move,{passive:false}); window.addEventListener('pointerup',end); window.addEventListener('pointercancel',end);
+  raf=requestAnimationFrame(tick);
+}
+
 function renderHome(){
   const ls=lists();
-  let h=`<header><div class="topbar"><div class="label">Omat listat</div><button class="iconbtn" id="setBtn" aria-label="Asetukset ja varmuuskopiot">${ICON.gear}</button></div>
+  if(homeReorder && ls.length<2) homeReorder=false;
+  if(homeReorder) return renderHomeReorder(ls);
+  let h=`<header><div class="topbar"><div class="label">Omat listat</div><div class="topbtns">${ls.length>1?`<button class="textbtn" id="roHome">Järjestä</button>`:''}<button class="iconbtn" id="setBtn" aria-label="Asetukset ja varmuuskopiot">${ICON.gear}</button></div></div>
     <div class="total">Listat</div>
     <div class="split">${ls.length?`<span><b>${ls.length}</b> ${ls.length===1?'lista':'listaa'}</span>`:''}</div></header>
     <div id="backupBanner"></div>`;
@@ -293,6 +335,7 @@ function renderHome(){
   h+=`<button class="btn addacc" id="impBtn">Tuo lista To Do:sta tai tekstistä</button>`;
   $('#app').innerHTML=h;
   $('#setBtn').onclick=openSettings;
+  if($('#roHome')) $('#roHome').onclick=()=>{ homeReorder=true; renderHome(); };
   $('#impBtn').onclick=()=>openImport();
   $$('[data-list]').forEach(b=>b.onclick=()=>{ filter='all'; go({v:'list',id:b.dataset.list}); });
   const fab=$('#fab'); fab.hidden=false; fab.textContent='+ Uusi lista'; fab.onclick=openNewList;
