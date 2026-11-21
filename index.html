@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Listat</title>
+<meta name="theme-color" content="#0c1a2a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="kuvake-192.png">
+<link rel="apple-touch-icon" href="kuvake-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#0c1a2a; --card:rgba(20,40,62,.72); --ink:#eaf2fa; --muted:#8fa6bd; --line:rgba(140,185,230,.16);
+  --accent:#5aaee8; --accent-soft:rgba(90,174,232,.16); --etf:#7fd6cf; --etf-soft:rgba(127,214,207,.14);
+  --pos:#6fd49a; --neg:#ff8f87; --shadow:0 6px 24px rgba(0,8,20,.35);
+  --field:rgba(8,20,34,.7);
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
+body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:
+    linear-gradient(118deg, transparent 0 38%, rgba(120,180,240,.10) 38% 38.4%, transparent 38.4% 52%, rgba(120,180,240,.07) 52% 61%, transparent 61%),
+    linear-gradient(118deg, transparent 0 70%, rgba(150,200,250,.12) 70% 70.3%, transparent 70.3%),
+    repeating-linear-gradient(118deg, rgba(255,255,255,.012) 0 2px, transparent 2px 5px),
+    radial-gradient(120% 80% at 80% 10%, #1d4a75 0%, transparent 60%),
+    linear-gradient(160deg, #0f2740 0%, #0b1b2c 55%, #071320 100%);}
+.card,.empty,.items{backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.total{background:linear-gradient(90deg,#ffffff,#a9d3f5);-webkit-background-clip:text;background-clip:text;color:transparent}
+body{padding:env(safe-area-inset-top) 0 calc(96px + env(safe-area-inset-bottom))}
+.wrap{max-width:560px;margin:0 auto;padding:20px 16px}
+header{padding:12px 4px 16px}
+.label{font-size:13px;color:var(--muted);letter-spacing:.02em}
+.total{font-size:40px;font-weight:700;letter-spacing:-.02em;margin:4px 0 8px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.total.name{font-size:32px}
+.split{display:flex;gap:16px;font-size:14px;color:var(--muted);flex-wrap:wrap}
+.split b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+.split .all{color:var(--pos);font-weight:600}
+.bar{display:flex;height:6px;border-radius:3px;overflow:hidden;background:var(--line);margin-top:14px}
+.bar span{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--etf));transition:width .25s ease}
+h2{font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:22px 4px 10px}
+.card{background:var(--card);border-radius:16px;padding:16px;margin-bottom:10px;box-shadow:var(--shadow);border:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:14px;cursor:pointer;width:100%;text-align:left;font:inherit;color:inherit}
+.card:active{transform:scale(.99)}
+.card .grow{flex:1;min-width:0}
+.card .name{font-weight:600;font-size:16px;overflow-wrap:anywhere}
+.card .sub{font-size:13px;color:var(--muted);margin-top:3px}
+.card .val{font-weight:600;font-size:17px;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.mini{height:4px;border-radius:2px;background:var(--line);margin-top:10px;overflow:hidden}
+.mini span{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--etf))}
+.empty{background:var(--card);border:1px dashed var(--line);border-radius:16px;padding:28px 20px;text-align:center;color:var(--muted);font-size:15px;line-height:1.5}
+.btn{font:inherit;font-weight:600;font-size:15px;border:0;border-radius:12px;padding:13px 16px;cursor:pointer;background:var(--accent-soft);color:var(--accent)}
+.btn.primary{background:linear-gradient(135deg,#6cbcf0,#3f8fd0);color:#05182b}
+.btn.danger{background:transparent;color:var(--neg)}
+.btn.ghost{background:transparent;color:var(--muted)}
+.btn:disabled{opacity:.5}
+.addacc{width:100%;margin-top:8px;background:transparent;border:1px dashed var(--line);color:var(--muted)}
+.fab{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom));box-shadow:0 6px 20px rgba(0,0,0,.18);padding:15px 28px;border-radius:999px;font-size:16px;z-index:5;white-space:nowrap}
+/* lista */
+.controls{display:flex;gap:10px;align-items:center;margin:4px 0 12px}
+.controls .seg{flex:1;margin:0}
+.controls .btn{padding:10px 12px;font-size:14px;white-space:nowrap}
+.items{background:var(--card);border-radius:16px;border:1px solid var(--line);box-shadow:var(--shadow);overflow:hidden}
+.it{display:flex;align-items:center;gap:12px;padding:13px 6px 13px 14px;border-bottom:1px solid var(--line);cursor:pointer;user-select:none;-webkit-user-select:none}
+.it:last-child{border-bottom:0}
+.it:active{background:rgba(140,185,230,.06)}
+.it.child{padding-left:50px}
+.it.child + .it:not(.child){border-top:1px solid var(--line)}
+.it .txt{flex:1;min-width:0;font-size:16px;line-height:1.35;overflow-wrap:anywhere}
+.it.parent .txt{font-weight:600}
+.it.child .txt{font-size:15px}
+.it .cnt{color:var(--muted);font-weight:500;font-size:13px;margin-left:6px;font-variant-numeric:tabular-nums}
+.exp{flex:none;display:inline-flex;align-items:center;gap:5px;font:inherit;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--accent);background:var(--accent-soft);border:1px solid rgba(90,174,232,.28);border-radius:999px;padding:5px 9px 5px 11px;cursor:pointer;margin-right:-4px}
+.exp svg{transition:transform .2s}
+.exp.open svg{transform:rotate(180deg)}
+.it.done .exp{color:var(--etf);background:var(--etf-soft);border-color:rgba(127,214,207,.28)}
+.it.parent.open{background:rgba(90,174,232,.07)}
+.it.child{background:rgba(8,20,34,.28)}
+.items.ro .it.child{background:transparent}
+.it.done .txt{color:var(--muted);text-decoration:line-through;text-decoration-color:rgba(143,166,189,.6)}
+.tick{flex:none;width:26px;height:26px;border-radius:50%;border:2px solid rgba(143,166,189,.55);background:transparent;display:grid;place-items:center;padding:0;cursor:pointer;transition:background .15s,border-color .15s}
+.it.child .tick{width:22px;height:22px}
+.tick svg{opacity:0;transition:opacity .15s}
+.it.done .tick{background:var(--etf);border-color:var(--etf)}
+.it.done .tick svg{opacity:1}
+.it.part .tick{border-color:var(--etf);background:var(--etf-soft)}
+.more{flex:none;background:transparent;border:0;color:var(--muted);padding:8px 10px;border-radius:10px;cursor:pointer;opacity:.75}
+.more svg{display:block}
+.topbtns{display:flex;align-items:center;gap:4px}
+.textbtn{background:transparent;border:0;color:var(--accent);font:inherit;font-weight:600;font-size:15px;padding:8px 10px;border-radius:10px;cursor:pointer}
+.items.ro .it{cursor:default}
+.items.ro .it:last-child{border-bottom:1px solid var(--line)}
+.items.ro .grp:last-child>.it:last-child{border-bottom:0}
+.items.ro .tick{pointer-events:none}
+.grip{flex:none;background:transparent;border:0;color:var(--muted);padding:10px 12px;margin:-6px 0;border-radius:10px;cursor:grab;touch-action:none}
+.grip svg{display:block}
+.grp,.it{transition:background .15s, box-shadow .15s}
+.dragging{position:relative;z-index:3;background:#1d3e60!important;box-shadow:0 10px 28px rgba(0,8,20,.55);border-radius:12px}
+.dragging .grip{color:var(--ink);cursor:grabbing}
+body.noselect{user-select:none;-webkit-user-select:none}
+.rohint{color:var(--muted);font-size:14px;line-height:1.45;margin:0 4px 12px}
+.inlineadd{display:flex;gap:8px;margin-top:10px}
+.inlineadd input{flex:1;min-width:0;font:inherit;font-size:16px;padding:12px 14px;border-radius:12px;border:1px dashed var(--line);background:transparent;color:var(--ink)}
+.inlineadd input:focus{outline:none;border-style:solid;border-color:var(--accent);background:var(--field)}
+.inlineadd .btn{padding:10px 14px}
+/* sheet */
+.scrim{position:fixed;inset:0;background:rgba(2,8,16,.6);display:none;align-items:flex-end;justify-content:center;z-index:10}
+.scrim.open{display:flex}
+.sheet{background:linear-gradient(170deg,#14304d,#0d1f33);border-top:1px solid var(--line);width:100%;max-width:560px;border-radius:20px 20px 0 0;padding:20px 18px calc(22px + env(safe-area-inset-bottom));max-height:88vh;overflow:auto;animation:up .18s ease-out}
+@keyframes up{from{transform:translateY(30px);opacity:.6}to{transform:none;opacity:1}}
+.sheet h3{margin:0 0 4px;font-size:20px}
+.sheet .hint{color:var(--muted);font-size:14px;margin:0 0 16px;line-height:1.45}
+.sheet .hint b{color:var(--ink);font-weight:600}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px;font-weight:500}
+.field input,.field select,.field textarea{width:100%;font:inherit;font-size:17px;padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:var(--field);color:var(--ink)}
+.field textarea{font-size:15px;line-height:1.45;min-height:150px;resize:vertical}
+.seg{display:flex;background:var(--field);border-radius:12px;padding:4px;gap:4px;margin-bottom:14px;border:1px solid var(--line)}
+.seg button{flex:1;font:inherit;font-size:14px;font-weight:600;border:0;background:transparent;color:var(--muted);padding:9px 6px;border-radius:9px;cursor:pointer}
+.seg button.on{background:#1d3e60;color:var(--ink);box-shadow:var(--shadow)}
+.actions{display:flex;gap:10px;margin-top:6px;flex-wrap:wrap}
+.actions .btn{flex:1}
+.stack{display:grid;gap:8px;margin:4px 0 10px}
+.stack .btn{text-align:left}
+.formerr{color:var(--neg);font-size:14px;min-height:1em;margin:4px 0 8px}
+.okmsg{color:var(--pos);font-size:14px;min-height:1.2em;margin:0 0 8px}
+.topbar{display:flex;justify-content:space-between;align-items:center;min-height:40px}
+.iconbtn{background:transparent;border:0;color:var(--muted);padding:8px;margin:-8px -8px 0 0;cursor:pointer;border-radius:10px}
+.iconbtn svg{display:block}
+.back{background:transparent;border:0;color:var(--accent);font:inherit;font-weight:600;font-size:15px;padding:8px 8px 8px 0;cursor:pointer;display:flex;align-items:center;gap:4px}
+.banner{background:var(--accent-soft);border:1px solid var(--line);border-radius:14px;padding:12px 14px;font-size:14px;line-height:1.45;margin:0 0 12px;display:flex;gap:10px;align-items:center;justify-content:space-between}
+.banner .btn{padding:9px 12px;font-size:14px;white-space:nowrap}
+.confirm{background:var(--etf-soft);border-radius:12px;padding:12px;margin:10px 0;font-size:14px;line-height:1.45}
+.preview{border-top:1px solid var(--line);margin:4px 0 12px;max-height:34vh;overflow:auto}
+.preview div{padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}
+.preview .c{padding-left:22px;color:var(--muted)}
+.preview .c::before{content:"↳ ";opacity:.6}
+.toast{position:fixed;left:50%;bottom:calc(86px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(10px);background:#1d3e60;color:var(--ink);border:1px solid var(--line);padding:10px 16px;border-radius:12px;font-size:14px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:20;max-width:90vw;text-align:center}
+.toast.show{opacity:1;transform:translateX(-50%)}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<button class="btn primary fab" id="fab" hidden></button>
+<div class="scrim" id="scrim"><div class="sheet" id="sheet"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const $$ = s => document.querySelectorAll(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fdate = d => { if(!d) return ''; const [y,m,dd]=d.slice(0,10).split('-'); return `${+dd}.${+m}.${y}`; };
+const newId = () => Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+const ICON = {
+  gear:`<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
+  dots:`<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>`,
+  check:`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#05182b" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>`,
+  chev:`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>`,
+  grip:`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 8h14M5 12h14M5 16h14"/></svg>`,
+  back:`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>`
+};
+
+/* ---------- tallennus (vain tähän laitteeseen) ---------- */
+const KEY='listat-v1', OLDKEY='pakkaus-v1';
+let store={lists:{},lastBackup:null,sound:true};
+function loadStore(){ try{ const t=localStorage.getItem(KEY)||localStorage.getItem(OLDKEY); if(t){ const d=JSON.parse(t); store={lists:d.lists||{},lastBackup:d.lastBackup||null,sound:d.sound!==false}; } }catch(e){ toast('Tietojen lukeminen epäonnistui.'); } }
+function persist(){ try{ localStorage.setItem(KEY,JSON.stringify(store)); }catch(e){ toast('Tallennus laitteeseen epäonnistui.'); } }
+const lists = () => Object.entries(store.lists).map(([id,l])=>({id,...l})).sort((a,b)=>(a.order||0)-(b.order||0));
+
+/* ---------- listan logiikka ---------- */
+function fixParents(L){ for(const it of L.items){ if(it.children&&it.children.length) it.done=it.children.every(c=>c.done); } }
+function progress(L){ let d=0,t=0; for(const it of L.items){ if(it.children&&it.children.length){ for(const c of it.children){ t++; if(c.done) d++; } } else { t++; if(it.done) d++; } } return {d,t}; }
+function findItem(L,id){ for(let i=0;i<L.items.length;i++){ const it=L.items[i]; if(it.id===id) return {it,arr:L.items,idx:i,parent:null}; const ch=it.children||[]; for(let j=0;j<ch.length;j++) if(ch[j].id===id) return {it:ch[j],arr:ch,idx:j,parent:it}; } return null; }
+function toggle(L,id){
+  const f=findItem(L,id); if(!f) return;
+  const {it,parent}=f;
+  if(it.children&&it.children.length){ const v=!it.children.every(c=>c.done); it.children.forEach(c=>c.done=v); it.done=v; }
+  else it.done=!it.done;
+  if(parent) parent.done=parent.children.every(c=>c.done);
+  L.updatedAt=Date.now(); persist();
+  return !!it.done;
+}
+
+/* ---------- äänimerkki: kaikuva kilahdus (Web Audio, ei äänitiedostoa) ---------- */
+let actx=null, reverb=null;
+function getReverb(){
+  if(reverb) return reverb;
+  // Keinotekoinen kaiku: hiljenevää kohinaa, noin 1,6 s
+  const sr=actx.sampleRate, len=Math.floor(sr*1.6), buf=actx.createBuffer(2,len,sr);
+  for(let ch=0;ch<2;ch++){ const d=buf.getChannelData(ch); for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/len,3); }
+  const conv=actx.createConvolver(); conv.buffer=buf;
+  const wet=actx.createGain(); wet.gain.value=0.32;
+  conv.connect(wet); wet.connect(actx.destination);
+  reverb=conv; return conv;
+}
+function ding(){
+  if(store.sound===false) return;
+  try{
+    actx=actx||new (window.AudioContext||window.webkitAudioContext)();
+    if(actx.state==='suspended') actx.resume();
+    const rv=getReverb(), t=actx.currentTime+0.01;
+    const tone=(f,peak,len)=>{ const o=actx.createOscillator(), g=actx.createGain();
+      o.type='sine'; o.frequency.setValueAtTime(f,t);
+      g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(peak,t+0.004); g.gain.exponentialRampToValueAtTime(0.0001,t+len);
+      o.connect(g); g.connect(actx.destination); g.connect(rv); o.start(t); o.stop(t+len+0.02); };
+    tone(1318.5,0.075,0.55);  // perussävel (E6)
+    tone(2637,0.016,0.28);    // oktaavi ylempänä: kirkkaus
+    tone(3640,0.006,0.14);    // hento kellomainen yläsävel
+  }catch(e){}
+}
+function clearAll(L){ for(const it of L.items){ it.done=false; (it.children||[]).forEach(c=>c.done=false); } L.updatedAt=Date.now(); persist(); }
+function cloneItems(items){ return items.map(it=>({id:newId(),text:it.text,done:false,children:(it.children||[]).map(c=>({id:newId(),text:c.text,done:false}))})); }
+function listToText(L){ return L.name+'\n'+L.items.map(it=>`- ${it.text}`+(it.children||[]).map(c=>`\n    - ${c.text}`).join('')).join('\n'); }
+
+/* ---------- tuonti tekstistä (To Do "Lähetä kopio", liitetty teksti) ---------- */
+const BOX=/^(?:\[[ xX✓]?\]|[◯○◌⚪⚫●◉◎☐☑☒□■▢✓✔✅❍⭕])\s*/u;
+const DASH=/^(?:[-–—*+•◦▫▪‣⁃·∙])\s+/u;
+const NUM=/^\d{1,3}[.)]\s+/;
+function parseText(raw, nameHint){
+  const out={name:'',items:[]};
+  const rows=[];
+  for(let line of String(raw||'').replace(/\r\n?/g,'\n').split('\n')){
+    line=line.replace(/ /g,' ').replace(/\t/g,'    ');
+    if(!line.trim()) continue;
+    if(/https?:\/\/|www\./i.test(line)) continue;
+    if(/microsoft\s*to\s*-?\s*do/i.test(line) && line.trim().length<60) continue;
+    if(/^\s*(lähetetty|sent from|skickat från|get outlook)/i.test(line)) continue;
+    const indent=line.match(/^ */)[0].length;
+    let t=line.trim(), kind='plain';
+    if(BOX.test(t)){ kind='box'; t=t.replace(BOX,''); }
+    else if(NUM.test(t)){ kind='num'; t=t.replace(NUM,''); }
+    else if(DASH.test(t)){ kind='dash'; t=t.replace(DASH,''); }
+    t=t.replace(BOX,'').replace(DASH,'').trim();
+    if(!t) continue;
+    rows.push({indent,kind,t});
+  }
+  if(!rows.length) return out;
+  // Otsikko: ensimmäinen merkitsemätön rivi, jota seuraa merkitty rivi (◯, [ ], 1.) samalla tasolla
+  const r0=rows[0], r1=rows[1];
+  if(r0.kind==='plain' && r1 && (r1.kind==='box'||r1.kind==='num') && r1.indent<=r0.indent){ out.name=r0.t; rows.shift(); }
+  const base=Math.min(...rows.map(r=>r.indent));
+  const hasNonDash=rows.some(r=>r.indent===base&&r.kind!=='dash');
+  let cur=null;
+  for(const r of rows){
+    const sub = cur && (r.indent>base || (hasNonDash && r.kind==='dash'));
+    if(sub){ cur.children.push({id:newId(),text:r.t,done:false}); }
+    else { cur={id:newId(),text:r.t,done:false,children:[]}; out.items.push(cur); }
+  }
+  if(nameHint) out.name=nameHint;
+  return out;
+}
+
+/* ---------- näkymät ---------- */
+let view={v:'home'}, useHist=true, sheetOpen=false, afterClose=null, filter='all', reorder=false;
+const openSet=new Set(); // auki olevat pääkohdat (vain tämän käyttökerran ajan)
+try{ if(window.top!==window) useHist=false; }catch(e){ useHist=false; }
+if(useHist){ try{ history.replaceState({v:'home'},''); }catch(e){ useHist=false; } }
+
+function go(v){ view=v; if(useHist){ try{ history.pushState(v,''); }catch(e){} } render(); window.scrollTo(0,0); }
+function goHome(){ if(useHist && history.state && history.state.v==='list'){ history.back(); } else { view={v:'home'}; render(); } }
+window.addEventListener('popstate',e=>{
+  const st=e.state||{v:'home'};
+  if(sheetOpen) hideSheet();
+  if(st.sheet){ try{ history.back(); }catch(e){} return; }
+  view={v:st.v||'home',id:st.id}; render();
+  if(afterClose){ const f=afterClose; afterClose=null; f(); }
+});
+
+function render(){
+  if(view.v==='list' && store.lists[view.id]) renderList(); else { view={v:'home'}; reorder=false; renderHome(); }
+}
+
+function renderHome(){
+  const ls=lists();
+  let h=`<header><div class="topbar"><div class="label">Omat listat</div><button class="iconbtn" id="setBtn" aria-label="Asetukset ja varmuuskopiot">${ICON.gear}</button></div>
+    <div class="total">Listat</div>
+    <div class="split">${ls.length?`<span><b>${ls.length}</b> ${ls.length===1?'lista':'listaa'}</span>`:''}</div></header>
+    <div id="backupBanner"></div>`;
+  if(!ls.length){
+    h+=`<div class="empty">Ei vielä listoja.<br>Luo uusi lista tai tuo valmis lista To Do -sovelluksesta.<br><br>Onko sinulla varmuuskopio? Tuo se oikean yläkulman ⚙-valikosta.</div>`;
+  } else {
+    h+=ls.map(l=>{ const {d,t}=progress(l); const pct=t?Math.round(d/t*100):0;
+      return `<button class="card" data-list="${l.id}"><div class="grow"><div class="name">${esc(l.name)}</div>
+        <div class="sub">${t?(d===t?'Kaikki tehty':`${d} / ${t} tehty`):'Tyhjä lista'}</div>
+        ${t?`<div class="mini"><span style="width:${pct}%"></span></div>`:''}</div>
+        <div class="val">${t?pct+'&nbsp;%':''}</div></button>`; }).join('');
+  }
+  h+=`<button class="btn addacc" id="impBtn">Tuo lista To Do:sta tai tekstistä</button>`;
+  $('#app').innerHTML=h;
+  $('#setBtn').onclick=openSettings;
+  $('#impBtn').onclick=()=>openImport();
+  $$('[data-list]').forEach(b=>b.onclick=()=>{ filter='all'; go({v:'list',id:b.dataset.list}); });
+  const fab=$('#fab'); fab.hidden=false; fab.textContent='+ Uusi lista'; fab.onclick=openNewList;
+  renderBanner();
+}
+
+function itemRow(it,child,hideDone){
+  const kids=it.children||[];
+  if(hideDone && it.done) return '';
+  const part=!it.done && kids.some(c=>c.done);
+  const isOpen=kids.length && openSet.has(it.id);
+  const exp=kids.length?`<button class="exp${isOpen?' open':''}" data-exp aria-expanded="${isOpen?'true':'false'}" aria-label="${isOpen?'Piilota':'Näytä'} alakohdat">${kids.filter(c=>c.done).length}/${kids.length}${ICON.chev}</button>`:'';
+  let h=`<div class="it${child?' child':''}${kids.length?' parent':''}${isOpen?' open':''}${it.done?' done':''}${part?' part':''}" data-id="${it.id}">
+    <button class="tick" aria-label="${it.done?'Poista merkintä':'Merkitse tehdyksi'}">${ICON.check}</button>
+    <div class="txt">${esc(it.text)}</div>${exp}
+    <button class="more" data-more="${it.id}" aria-label="Muokkaa kohtaa">${ICON.dots}</button></div>`;
+  if(isOpen) for(const c of kids) h+=itemRow(c,true,hideDone);
+  return h;
+}
+
+function roRow(it,child){
+  const kids=it.children||[];
+  return `<div class="it${child?' child':''}${kids.length?' parent':''}${it.done?' done':''}" data-id="${it.id}">
+    <span class="tick">${ICON.check}</span><div class="txt">${esc(it.text)}</div>
+    <button class="grip" data-grip aria-label="Vedä siirtääksesi">${ICON.grip}</button></div>`;
+}
+
+function renderList(){
+  const L=store.lists[view.id];
+  if(reorder && !L.items.length) reorder=false;
+  if(reorder) return renderReorder(L);
+  const {d,t}=progress(L);
+  const hide=filter==='open';
+  const rows=L.items.map(it=>itemRow(it,false,hide)).join('');
+  let h=`<header><div class="topbar"><button class="back" id="backBtn">${ICON.back}Listat</button>
+      <div class="topbtns">${L.items.length>1||L.items.some(i=>(i.children||[]).length)?`<button class="textbtn" id="roBtn">Järjestä</button>`:''}
+      <button class="iconbtn" id="listMenu" aria-label="Listan toiminnot">${ICON.dots}</button></div></div>
+    <div class="label" style="margin-top:6px">${esc(L.name)}</div>
+    <div class="total">${t?`${d} / ${t}`:'–'}</div>
+    <div class="split">${t?(d===t?'<span class="all">Kaikki tehty!</span>':`<span>Jäljellä <b>${t-d}</b></span>`):'<span>Lista on tyhjä</span>'}</div>
+    ${t?`<div class="bar"><span style="width:${d/t*100}%"></span></div>`:''}</header>`;
+  if(L.items.length){
+    h+=`<div class="controls">${seg('flt',[['all','Kaikki'],['open','Jäljellä']],filter)}
+      <button class="btn" id="clearBtn" ${d?'':'disabled'}>Tyhjennä merkinnät</button></div>
+      <div id="clearConfirm"></div>`;
+    h+= rows ? `<div class="items" id="items">${rows}</div>` : `<div class="empty">Kaikki on tehty. 🎉</div>`;
+  } else {
+    h+=`<div class="empty">Lista on tyhjä.<br>Lisää kohtia alta tai tuo ne To Do:sta ⋯-valikon kautta.</div>`;
+  }
+  h+=`<div class="inlineadd"><input id="quickAdd" placeholder="+ Lisää kohta" enterkeyhint="done" autocomplete="off"><button class="btn" id="quickBtn" hidden>Lisää</button></div>`;
+  $('#app').innerHTML=h;
+  $('#backBtn').onclick=goHome;
+  $('#listMenu').onclick=()=>openListMenu(L);
+  if($('#roBtn')) $('#roBtn').onclick=()=>{ reorder=true; renderList(); };
+  if(L.items.length){
+    bindSeg('flt',v=>{ filter=v; renderList(); });
+    $('#clearBtn').onclick=()=>{
+      $('#clearConfirm').innerHTML=`<div class="confirm">Poistetaanko kaikki ${d} merkintää? Lista ja sen kohdat säilyvät seuraavaa käyttökertaa varten.<div class="actions"><button class="btn ghost" id="cNo">Ei</button><button class="btn primary" id="cYes">Tyhjennä</button></div></div>`;
+      $('#cNo').onclick=()=>$('#clearConfirm').innerHTML='';
+      $('#cYes').onclick=()=>{ clearAll(L); filter='all'; renderList(); toast('Merkinnät tyhjennetty'); };
+    };
+  }
+  const items=$('#items');
+  if(items) items.addEventListener('click',e=>{
+    const m=e.target.closest('[data-more]'); if(m){ openItem(L,m.dataset.more); return; }
+    const row=e.target.closest('.it'); if(!row) return;
+    const id=row.dataset.id;
+    // Pääkohta, jolla on alakohtia: rasti merkitsee, muu kohta avaa tai sulkee alakohdat
+    if(row.classList.contains('parent') && !e.target.closest('.tick')){ openSet.has(id)?openSet.delete(id):openSet.add(id); renderList(); return; }
+    if(toggle(L,id)) ding(); renderList();
+  });
+  const qa=$('#quickAdd'), qb=$('#quickBtn');
+  const add=()=>{ const v=qa.value.trim(); if(!v) return; L.items.push({id:newId(),text:v,done:false,children:[]}); L.updatedAt=Date.now(); persist(); renderList(); const n=$('#quickAdd'); n.focus(); };
+  qa.addEventListener('input',()=>qb.hidden=!qa.value.trim());
+  qa.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); add(); } });
+  qb.onclick=add;
+  const fab=$('#fab'); fab.hidden=false; fab.textContent='+ Lisää kohta'; fab.onclick=()=>openAdd(L);
+}
+
+/* ---------- järjestäminen vetämällä ---------- */
+function renderReorder(L){
+  $('#app').innerHTML=`<header><div class="topbar"><div class="label">${esc(L.name)}</div><button class="btn primary" id="roDone" style="padding:9px 18px">Valmis</button></div>
+    <div class="total name">Järjestä</div></header>
+    <p class="rohint">Vedä kohtaa oikean reunan ≡-kahvasta. Pääkohta siirtyy alakohtineen. Alakohdan voi vetää myös toisen pääkohdan alle.</p>
+    <div class="items ro" id="items">${L.items.map(it=>`<div class="grp" data-g="${it.id}">${roRow(it,false)}${(it.children||[]).map(c=>roRow(c,true)).join('')}</div>`).join('')}</div>`;
+  $('#fab').hidden=true;
+  $('#roDone').onclick=()=>{ reorder=false; renderList(); };
+  $('#items').addEventListener('pointerdown',e=>{
+    const g=e.target.closest('[data-grip]'); if(!g) return;
+    e.preventDefault();
+    const row=g.closest('.it'), isChild=row.classList.contains('child');
+    startDrag(e, isChild?row:row.closest('.grp'), isChild, L);
+  });
+}
+function startDrag(e,el,isChild,L){
+  const box=$('#items');
+  const grab=e.clientY-el.getBoundingClientRect().top;
+  let py=e.clientY, raf=0, active=true;
+  el.classList.add('dragging'); document.body.classList.add('noselect');
+  const place=()=>{ el.style.transform=''; const top=el.getBoundingClientRect().top; el.style.transform=`translateY(${py-grab-top}px)`; };
+  const reposition=()=>{
+    if(!isChild){
+      let before=null;
+      for(const g of box.querySelectorAll('.grp')){ if(g===el) continue; const r=g.getBoundingClientRect(); if(py<r.top+r.height/2){ before=g; break; } }
+      if(before){ if(el.nextElementSibling!==before) box.insertBefore(el,before); }
+      else if(box.lastElementChild!==el) box.appendChild(el);
+    } else {
+      let anchor=null;
+      for(const r of box.querySelectorAll('.it')){ if(r===el) continue; const rc=r.getBoundingClientRect(); if(rc.top+rc.height/2<py) anchor=r; else break; }
+      if(!anchor) anchor=box.querySelector('.grp>.it');
+      if(anchor.nextElementSibling!==el) anchor.after(el);
+    }
+  };
+  const tick=()=>{ if(!active) return;
+    const vh=window.innerHeight; const dy= py<80 ? -12 : py>vh-90 ? 12 : 0;
+    if(dy) window.scrollBy(0,dy);
+    el.style.transform=''; reposition(); place();
+    raf=requestAnimationFrame(tick); };
+  const move=ev=>{ py=ev.clientY; if(ev.cancelable) ev.preventDefault(); };
+  const end=()=>{ active=false; cancelAnimationFrame(raf);
+    window.removeEventListener('pointermove',move); window.removeEventListener('pointerup',end); window.removeEventListener('pointercancel',end);
+    el.style.transform=''; el.classList.remove('dragging'); document.body.classList.remove('noselect'); commitOrder(L); };
+  window.addEventListener('pointermove',move,{passive:false}); window.addEventListener('pointerup',end); window.addEventListener('pointercancel',end);
+  raf=requestAnimationFrame(tick);
+}
+function commitOrder(L){
+  const byId={}; for(const it of L.items){ byId[it.id]=it; for(const c of it.children||[]) byId[c.id]=c; }
+  const items=[];
+  for(const g of $('#items').querySelectorAll('.grp')){
+    const rows=[...g.querySelectorAll('.it')]; if(!rows.length) continue;
+    const main=byId[rows[0].dataset.id];
+    main.children=rows.slice(1).map(r=>{ const c=byId[r.dataset.id]; return {id:c.id,text:c.text,done:!!c.done}; });
+    items.push(main);
+  }
+  if(items.length){ L.items=items; fixParents(L); L.updatedAt=Date.now(); persist(); }
+  renderList();
+}
+
+/* ---------- sheetit ---------- */
+function openSheet(html, bind){
+  $('#sheet').innerHTML=html; $('#scrim').classList.add('open');
+  if(!sheetOpen){ sheetOpen=true; if(useHist){ try{ history.pushState({...(history.state||view),sheet:true},''); }catch(e){} } }
+  bind&&bind();
+}
+function hideSheet(){ sheetOpen=false; $('#scrim').classList.remove('open'); $('#sheet').innerHTML=''; }
+function closeSheet(after){
+  if(sheetOpen && useHist && history.state && history.state.sheet){ afterClose=after||null; history.back(); }
+  else { hideSheet(); render(); after&&after(); }
+}
+$('#scrim').addEventListener('click',e=>{ if(e.target.id==='scrim') closeSheet(); });
+
+function seg(name, opts, val){ return `<div class="seg" data-seg="${name}">${opts.map(([v,l])=>`<button type="button" data-v="${v}" class="${v===val?'on':''}">${l}</button>`).join('')}</div>`; }
+function bindSeg(name, onChange){ const el=document.querySelector(`[data-seg="${name}"]`); el.querySelectorAll('button').forEach(b=>b.onclick=()=>{ el.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b)); onChange(b.dataset.v); }); }
+
+let toastT=0;
+function toast(t){ const el=$('#toast'); el.textContent=t; el.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>el.classList.remove('show'),2200); }
+
+function openNewList(){
+  const ls=lists();
+  openSheet(`<h3>Uusi lista</h3><p class="hint">Esimerkiksi “Pakkauslista”, “Kauppalista” tai “Kevätsiivous”.</p>
+  <div class="field"><label>Nimi</label><input id="nName" placeholder="Listan nimi" enterkeyhint="done"></div>
+  ${ls.length?`<div class="field"><label>Pohja</label><select id="nBase"><option value="">Tyhjä lista</option>${ls.map(l=>`<option value="${l.id}">Kopioi kohdat listasta: ${esc(l.name)}</option>`).join('')}</select></div>`:''}
+  <div class="formerr" id="formerr"></div>
+  <div class="actions"><button class="btn ghost" id="cancel">Peruuta</button><button class="btn primary" id="save">Luo lista</button></div>`,
+  ()=>{
+    setTimeout(()=>$('#nName').focus(),60);
+    const save=()=>{ const name=$('#nName').value.trim(); if(!name){ $('#formerr').textContent='Anna listalle nimi.'; return; }
+      const base=$('#nBase')&&$('#nBase').value; const id=newId();
+      store.lists[id]={name,order:Date.now(),createdAt:Date.now(),items:base&&store.lists[base]?cloneItems(store.lists[base].items):[]};
+      persist(); closeSheet(()=>{ filter='all'; go({v:'list',id}); }); };
+    $('#nName').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); save(); } });
+    $('#cancel').onclick=()=>closeSheet(); $('#save').onclick=save;
+  });
+}
+
+function parentOptions(L,sel){ return `<option value="">Pääkohta</option>`+L.items.map(m=>`<option value="${m.id}" ${m.id===sel?'selected':''}>Alakohta: ${esc(m.text)}</option>`).join(''); }
+
+function openAdd(L,parentId){
+  openSheet(`<h3>Lisää kohta</h3><p class="hint">Voit lisätä useita peräkkäin. Alakohta tulee valitun kohdan alle, esim. Hygienia → Hammasharja.</p>
+  <div class="field"><label>Kohta</label><input id="aTxt" placeholder="esim. Puhelimen laturi" enterkeyhint="done" autocomplete="off"></div>
+  <div class="field"><label>Paikka</label><select id="aPar">${parentOptions(L,parentId)}</select></div>
+  <div class="okmsg" id="aMsg"></div>
+  <div class="actions"><button class="btn ghost" id="done">Valmis</button><button class="btn primary" id="add">Lisää</button></div>`,
+  ()=>{
+    setTimeout(()=>$('#aTxt').focus(),60);
+    const add=()=>{ const v=$('#aTxt').value.trim(); if(!v){ $('#aTxt').focus(); return; }
+      const pid=$('#aPar').value, it={id:newId(),text:v,done:false,children:[]};
+      if(pid){ const p=L.items.find(x=>x.id===pid); if(p){ delete it.children; (p.children=p.children||[]).push(it); p.done=false; openSet.add(pid); } }
+      else { L.items.push(it); const s=$('#aPar'); s.innerHTML=parentOptions(L,''); }
+      L.updatedAt=Date.now(); persist(); $('#aMsg').textContent='Lisätty: '+v; $('#aTxt').value=''; $('#aTxt').focus(); };
+    $('#aTxt').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); add(); } });
+    $('#add').onclick=add; $('#done').onclick=()=>closeSheet();
+  });
+}
+
+function openItem(L,id){
+  const f=findItem(L,id); if(!f) return;
+  const {it,arr,idx,parent}=f;
+  const kids=it.children||[];
+  const others=L.items.filter(m=>m.id!==it.id);
+  openSheet(`<h3>Muokkaa kohtaa</h3>${kids.length?`<p class="hint">${kids.length} alakohtaa</p>`:''}
+  <div class="field"><label>Nimi</label><input id="iTxt" value="${esc(it.text)}" enterkeyhint="done"></div>
+  <div class="field"><label>Paikka</label><select id="iPar"><option value="">Pääkohta</option>${others.map(m=>`<option value="${m.id}" ${parent&&parent.id===m.id?'selected':''}>Alakohta: ${esc(m.text)}</option>`).join('')}</select></div>
+  <p class="hint" id="iParHint" hidden>Myös sen ${kids.length} alakohtaa siirtyvät valitun pääkohdan alle.</p>
+  <div class="stack">
+    ${!parent?`<button class="btn" id="iSub">+ Lisää alakohta</button>`:''}
+    <div class="actions" style="margin:0"><button class="btn" id="iUp" ${idx===0?'disabled':''}>↑ Ylös</button><button class="btn" id="iDown" ${idx===arr.length-1?'disabled':''}>↓ Alas</button></div>
+  </div>
+  <div id="delConfirm"></div>
+  <div class="actions"><button class="btn danger" id="iDel">Poista</button><button class="btn primary" id="iSave">Tallenna</button></div>`,
+  ()=>{
+    const saveText=()=>{ const v=$('#iTxt').value.trim(); if(v) it.text=v; };
+    const commit=()=>{ fixParents(L); L.updatedAt=Date.now(); persist(); };
+    const curPar=parent?parent.id:'';
+    $('#iPar').onchange=()=>{ $('#iParHint').hidden=!(kids.length && $('#iPar').value); };
+    const move=()=>{ const dest=$('#iPar').value; if(dest===curPar) return false;
+      arr.splice(idx,1);
+      if(!dest){ const pi=L.items.indexOf(parent); L.items.splice(pi+1,0,{id:it.id,text:it.text,done:it.done,children:[]}); }
+      else { const P=L.items.find(x=>x.id===dest); P.children=P.children||[];
+        P.children.push({id:it.id,text:it.text,done:!!it.done}, ...kids.map(c=>({id:c.id,text:c.text,done:!!c.done}))); openSet.add(dest); }
+      return true; };
+    $('#iSave').onclick=()=>{ saveText(); const moved=move(); commit(); closeSheet(); if(moved) setTimeout(()=>toast('Kohta siirretty'),50); };
+    $('#iTxt').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); $('#iSave').click(); } });
+    if($('#iSub')) $('#iSub').onclick=()=>{ saveText(); commit(); openSet.add(it.id); openAdd(L,it.id); };
+    $('#iUp').onclick=()=>{ saveText(); if(idx>0){ arr.splice(idx-1,0,arr.splice(idx,1)[0]); commit(); } closeSheet(); };
+    $('#iDown').onclick=()=>{ saveText(); if(idx<arr.length-1){ arr.splice(idx+1,0,arr.splice(idx,1)[0]); commit(); } closeSheet(); };
+    $('#iDel').onclick=()=>{
+      if(!kids.length){ arr.splice(idx,1); commit(); closeSheet(); return; }
+      $('#delConfirm').innerHTML=`<div class="confirm">Poistetaanko ${esc(it.text)} ja sen ${kids.length} alakohtaa?<div class="actions"><button class="btn ghost" id="cNo">Ei</button><button class="btn danger" id="cYes">Poista</button></div></div>`;
+      $('#cNo').onclick=()=>$('#delConfirm').innerHTML='';
+      $('#cYes').onclick=()=>{ arr.splice(idx,1); commit(); closeSheet(); };
+    };
+  });
+}
+
+function openListMenu(L){
+  const id=view.id;
+  openSheet(`<h3>Listan asetukset</h3>
+  <div class="field"><label>Nimi</label><input id="lName" value="${esc(L.name)}" enterkeyhint="done"></div>
+  <div class="stack">
+    <button class="btn" id="lImp">Tuo lisää kohtia To Do:sta tai tekstistä</button>
+    <button class="btn" id="lCopy">Tee listasta kopio</button>
+    <button class="btn" id="lShare">Jaa tai kopioi tekstinä</button>
+  </div>
+  <div id="delConfirm"></div>
+  <div class="actions"><button class="btn danger" id="lDel">Poista lista</button><button class="btn primary" id="lSave">Tallenna</button></div>`,
+  ()=>{
+    const saveName=()=>{ const v=$('#lName').value.trim(); if(v&&v!==L.name){ L.name=v; persist(); } };
+    $('#lSave').onclick=()=>{ saveName(); closeSheet(); };
+    $('#lName').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); $('#lSave').click(); } });
+    $('#lImp').onclick=()=>{ saveName(); openImport('',id); };
+    $('#lCopy').onclick=()=>{ saveName(); const nid=newId(); store.lists[nid]={name:L.name+' (kopio)',order:Date.now(),createdAt:Date.now(),items:cloneItems(L.items)}; persist();
+      closeSheet(()=>{ view={v:'list',id:nid}; try{ history.replaceState(view,''); }catch(e){} render(); toast('Kopio luotu'); }); };
+    $('#lShare').onclick=async()=>{ saveName(); const txt=listToText(L);
+      try{ if(navigator.share){ await navigator.share({title:L.name,text:txt}); return; } }catch(e){ if(e&&e.name==='AbortError') return; }
+      try{ await navigator.clipboard.writeText(txt); toast('Lista kopioitu leikepöydälle'); }catch(e){ toast('Kopiointi ei onnistunut'); } };
+    $('#lDel').onclick=()=>{
+      $('#delConfirm').innerHTML=`<div class="confirm">Poistetaanko lista ${esc(L.name)} pysyvästi?<div class="actions"><button class="btn ghost" id="cNo">Ei</button><button class="btn danger" id="cYes">Poista</button></div></div>`;
+      $('#cNo').onclick=()=>$('#delConfirm').innerHTML='';
+      $('#cYes').onclick=()=>{ delete store.lists[id]; persist(); closeSheet(()=>goHome()); };
+    };
+  });
+}
+
+function openImport(text, targetId, nameHint){
+  const ls=lists();
+  openSheet(`<h3>Tuo lista</h3>
+  <p class="hint"><b>To Do:sta:</b> avaa lista, napauta oikean yläkulman ⋮ ja valitse <b>Lähetä kopio</b>. Jos Listat on asennettu puhelimeen, valitse se suoraan. Muuten valitse esim. Gmail, kopioi viestin teksti ja liitä se tähän.<br><br>Voit myös kirjoittaa listan itse: rivi, joka alkaa viivalla (-) tai välilyönneillä otsikkorivin alla, tulee alakohdaksi.</p>
+  <div class="field"><label>Minne</label><select id="tTarget"><option value="">Uusi lista</option>${ls.map(l=>`<option value="${l.id}" ${l.id===targetId?'selected':''}>Lisää listaan: ${esc(l.name)}</option>`).join('')}</select></div>
+  <div class="field" id="tNameWrap"><label>Listan nimi</label><input id="tName" placeholder="esim. Pakkauslista"></div>
+  <div class="field"><label>Teksti</label><textarea id="tText" placeholder="Liitä lista tähän"></textarea></div>
+  <div class="actions" style="margin:-4px 0 12px"><button class="btn" id="tPaste">Liitä leikepöydältä</button></div>
+  <div class="label" id="tCount"></div><div class="preview" id="tPrev"></div>
+  <div class="formerr" id="formerr"></div>
+  <div class="actions"><button class="btn ghost" id="cancel">Peruuta</button><button class="btn primary" id="tGo" disabled>Tuo</button></div>`,
+  ()=>{
+    const ta=$('#tText'); ta.value=text||'';
+    let parsed=null, nameTouched=!!nameHint;
+    if(nameHint) $('#tName').value=nameHint;
+    const upd=()=>{
+      $('#tNameWrap').hidden=!!$('#tTarget').value;
+      parsed=parseText(ta.value);
+      if(!nameTouched) $('#tName').value=parsed.name||'';
+      const n=parsed.items.length, m=parsed.items.reduce((s,i)=>s+i.children.length,0);
+      $('#tCount').textContent=n?`${n} kohtaa${m?`, joista alakohtia ${m}`:''}`:'';
+      $('#tPrev').innerHTML=parsed.items.map(i=>`<div>${esc(i.text)}</div>`+i.children.map(c=>`<div class="c">${esc(c.text)}</div>`).join('')).join('');
+      $('#tPrev').hidden=!n; $('#tGo').disabled=!n;
+    };
+    ta.addEventListener('input',upd); $('#tTarget').onchange=upd;
+    $('#tName').addEventListener('input',()=>nameTouched=true);
+    $('#tPaste').onclick=async()=>{ try{ const t=await navigator.clipboard.readText(); if(t){ ta.value=t; upd(); } else $('#formerr').textContent='Leikepöytä on tyhjä.'; }catch(e){ $('#formerr').textContent='Liittäminen ei onnistunut. Paina tekstikenttää pitkään ja valitse Liitä.'; } };
+    $('#cancel').onclick=()=>closeSheet();
+    $('#tGo').onclick=()=>{
+      if(!parsed||!parsed.items.length) return;
+      const tgt=$('#tTarget').value;
+      if(tgt && store.lists[tgt]){ const L=store.lists[tgt]; L.items.push(...parsed.items); L.updatedAt=Date.now(); persist();
+        closeSheet(()=>{ if(view.v!=='list'||view.id!==tgt) go({v:'list',id:tgt}); toast(`${parsed.items.length} kohtaa lisätty`); }); return; }
+      const name=$('#tName').value.trim()||parsed.name||'Uusi lista', id=newId();
+      store.lists[id]={name,order:Date.now(),createdAt:Date.now(),items:parsed.items}; persist();
+      closeSheet(()=>{ filter='all'; go({v:'list',id}); toast('Lista tuotu'); });
+    };
+    upd();
+  });
+}
+
+/* ---------- varmuuskopiot ---------- */
+const hasData=()=>Object.keys(store.lists).length>0;
+function renderBanner(){
+  const el=$('#backupBanner'); if(!el) return; if(!hasData()){ el.innerHTML=''; return; }
+  const days=store.lastBackup?(Date.now()-new Date(store.lastBackup).getTime())/864e5:Infinity;
+  if(days<90){ el.innerHTML=''; return; }
+  el.innerHTML=`<div class="banner"><span>${store.lastBackup?'Edellisestä varmuuskopiosta on yli kolme kuukautta.':'Listasi ovat vain tässä puhelimessa. Tee varmuuskopio.'}</span><button class="btn" id="bkNow">Varmuuskopioi</button></div>`;
+  $('#bkNow').onclick=()=>{ exportData(); render(); };
+}
+function exportData(){
+  const d=new Date(), stamp=d.toISOString().slice(0,10);
+  const data={app:'listat',version:1,exportedAt:d.toISOString(),lists:store.lists};
+  const blob=new Blob([JSON.stringify(data,null,1)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`listat-varmuuskopio-${stamp}.json`;
+  document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},2000);
+  store.lastBackup=d.toISOString(); persist();
+}
+function importBackup(file){
+  const rd=new FileReader();
+  rd.onload=()=>{ let d; try{ d=JSON.parse(rd.result); }catch(e){ $('#formerr').textContent='Tiedostoa ei voitu lukea.'; return; }
+    if(!['listat','pakkaus'].includes(d.app)||!d.lists){ $('#formerr').textContent='Tämä ei ole Listat-sovelluksen varmuuskopio.'; return; }
+    const n=Object.keys(d.lists).length;
+    $('#impConfirm').innerHTML=`<div class="confirm">Tiedostossa on ${n} listaa${d.exportedAt?' ('+fdate(d.exportedAt)+')':''}. ${hasData()?'Ne <b>korvaavat</b> nykyiset listat tässä puhelimessa.':''}<div class="actions"><button class="btn ghost" id="iNo">Peruuta</button><button class="btn primary" id="iYes">Palauta</button></div></div>`;
+    $('#iNo').onclick=()=>$('#impConfirm').innerHTML='';
+    $('#iYes').onclick=()=>{ store={lists:d.lists,lastBackup:new Date().toISOString(),sound:store.sound}; persist(); closeSheet(()=>toast('Varmuuskopio palautettu')); };
+  };
+  rd.readAsText(file);
+}
+function openSettings(){
+  openSheet(`<h3>Asetukset</h3>
+  <div class="field" style="margin-top:12px"><label>Äänimerkki, kun kohta merkitään tehdyksi</label>${seg('snd',[['on','Päällä'],['off','Pois']],store.sound===false?'off':'on')}</div>
+  <h3 style="font-size:17px;margin-top:6px">Tiedot ja varmuuskopiot</h3>
+  <p class="hint">Listat tallentuvat vain tähän puhelimeen. Varmuuskopio on tiedosto, jonka avulla listat saa palautettua esimerkiksi uuteen puhelimeen. Säilytä se vaikka Google Drivessa.<br><br>Edellinen varmuuskopio: <b>${store.lastBackup?fdate(store.lastBackup):'ei vielä'}</b></p>
+  <div class="actions"><button class="btn primary" id="sExp" ${hasData()?'':'disabled'}>Tee varmuuskopio</button><button class="btn" id="sImp">Palauta varmuuskopio</button></div>
+  <input type="file" id="sFile" accept=".json,application/json" hidden>
+  <div class="formerr" id="formerr"></div><div id="impConfirm"></div>
+  <p class="hint" style="margin-top:12px">Kun sovellus on asennettu aloitusnäytölle, se näkyy Androidin jakovalikossa. Silloin To Do -listan voi lähettää suoraan tänne: To Do → lista → ⋮ → Lähetä kopio → Listat.</p>
+  <div class="actions"><button class="btn ghost" id="sClose">Sulje</button></div>`,
+  ()=>{ bindSeg('snd',v=>{ store.sound=v==='on'; persist(); if(store.sound) ding(); });
+    $('#sExp').onclick=()=>{ exportData(); closeSheet(); }; $('#sImp').onclick=()=>$('#sFile').click();
+    $('#sFile').onchange=e=>{ const f=e.target.files[0]; if(f) importBackup(f); }; $('#sClose').onclick=()=>closeSheet(); });
+}
+
+/* ---------- käynnistys ---------- */
+loadStore(); render();
+// Jakovalikosta tuleva teksti (Web Share Target)
+(function(){
+  let p; try{ p=new URLSearchParams(location.search); }catch(e){ return; }
+  const title=(p.get('title')||'').trim(), text=(p.get('text')||'').trim(), url=(p.get('url')||'').trim();
+  if(!title && !text && !url) return;
+  try{ history.replaceState({v:'home'},'',location.pathname); }catch(e){}
+  let body=text||url; let hint='';
+  if(title && body && !body.startsWith(title)) hint=title.replace(/^(microsoft to ?do\s*[-:–]\s*)/i,'');
+  if(!body) body=title;
+  openImport(body,'',hint);
+})();
+try{ navigator.storage&&navigator.storage.persist&&navigator.storage.persist(); }catch(e){}
+if('serviceWorker' in navigator && location.protocol==='https:'){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
+</script>
+</body>
+</html>
