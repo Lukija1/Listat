@@ -268,10 +268,21 @@ window.addEventListener('popstate',e=>{
   const st=e.state||{v:'home'};
   if(sheetOpen) hideSheet();
   if(st.sheet){ try{ history.back(); }catch(e){} return; }
-  view={v:st.v||'home',id:st.id}; render();
+  view={v:st.v||'home',id:st.id};
+  reorder=!!(st.ro && view.v==='list'); homeReorder=!!(st.ro && view.v==='home');
+  render();
   if(afterClose){ const f=afterClose; afterClose=null; f(); }
 });
 
+// Järjestämistila on oma historiamerkintänsä, joten puhelimen paluu-painike sulkee sen
+function enterReorder(){
+  if(view.v==='list') reorder=true; else homeReorder=true;
+  if(useHist){ try{ history.pushState({v:view.v,id:view.id,ro:true},''); }catch(e){} }
+}
+function exitReorder(){
+  if(useHist && history.state && history.state.ro){ history.back(); return; }
+  reorder=false; homeReorder=false; render();
+}
 function render(){
   if(view.v==='list' && store.lists[view.id]) renderList(); else { view={v:'home'}; reorder=false; renderHome(); }
 }
@@ -331,7 +342,7 @@ function renderHomeReorder(ls){
     <div id="homeList">${ls.map(l=>`<div class="card" data-sort="${l.id}" style="cursor:default"><div class="grow"><div class="name">${esc(l.name)}</div></div>
       <button class="grip" data-grip aria-label="Vedä siirtääksesi">${ICON.grip}</button></div>`).join('')}</div>`;
   $('#fab').hidden=true;
-  $('#roDone').onclick=()=>{ homeReorder=false; renderHome(); };
+  $('#roDone').onclick=exitReorder;
   const box=$('#homeList');
   box.addEventListener('pointerdown',e=>{
     const g=e.target.closest('[data-grip]'); if(!g || drag) return;
@@ -371,12 +382,12 @@ function renderHome(){
   h+=`<button class="btn addacc" id="impBtn">Tuo lista To Do:sta tai tekstistä</button>`;
   $('#app').innerHTML=h;
   $('#setBtn').onclick=openSettings;
-  if($('#roHome')) $('#roHome').onclick=()=>{ homeReorder=true; renderHome(); };
+  if($('#roHome')) $('#roHome').onclick=()=>{ enterReorder(); renderHome(); };
   $('#impBtn').onclick=()=>openImport();
   $$('[data-list]').forEach(b=>b.onclick=()=>{ if(blockClick()) return; filter='all'; go({v:'list',id:b.dataset.list}); });
   if($('#homeCards') && ls.length>1) onLongPress($('#homeCards'),'[data-list]',(card,y)=>{
     const id=card.dataset.list, oldTop=card.getBoundingClientRect().top;
-    homeReorder=true; renderHome();
+    enterReorder(); renderHome();
     const el=document.querySelector(`[data-sort="${id}"]`); keepUnder(el,oldTop); if(el) beginListDrag(el,y);
   });
   const fab=$('#fab'); fab.hidden=false; fab.textContent='+ Uusi lista'; fab.onclick=openNewList;
@@ -430,7 +441,7 @@ function renderList(){
   $('#app').innerHTML=h;
   $('#backBtn').onclick=goHome;
   $('#listMenu').onclick=()=>openListMenu(L);
-  if($('#roBtn')) $('#roBtn').onclick=()=>{ reorder=true; renderList(); };
+  if($('#roBtn')) $('#roBtn').onclick=()=>{ enterReorder(); renderList(); };
   if(L.items.length){
     bindSeg('flt',v=>{ filter=v; renderList(); });
     $('#clearBtn').onclick=()=>{
@@ -442,7 +453,7 @@ function renderList(){
   const items=$('#items');
   if(items) onLongPress(items,'.it',(row,y)=>{
     const id=row.dataset.id, oldTop=row.getBoundingClientRect().top;
-    reorder=true; renderList();
+    enterReorder(); renderList();
     const el=document.querySelector(`#items .it[data-id="${id}"]`); keepUnder(el,oldTop); if(el) beginItemDrag(el,y,L);
   });
   if(items) items.addEventListener('click',e=>{
@@ -469,7 +480,7 @@ function renderReorder(L){
     <p class="rohint">Vedä kohtaa ≡-kahvasta tai painamalla sitä pitkään. Pääkohta siirtyy alakohtineen. Alakohdan voi vetää myös toisen pääkohdan alle.</p>
     <div class="items ro" id="items">${L.items.map(it=>`<div class="grp" data-g="${it.id}">${roRow(it,false)}${(it.children||[]).map(c=>roRow(c,true)).join('')}</div>`).join('')}</div>`;
   $('#fab').hidden=true;
-  $('#roDone').onclick=()=>{ reorder=false; renderList(); };
+  $('#roDone').onclick=exitReorder;
   const box=$('#items');
   box.addEventListener('pointerdown',e=>{
     const g=e.target.closest('[data-grip]'); if(!g || drag) return;
