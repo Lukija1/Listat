@@ -65,6 +65,7 @@ h2{font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;le
 .controls .seg{flex:1;margin:0}
 .controls .btn{padding:10px 12px;font-size:14px;white-space:nowrap}
 .items{background:var(--card);border-radius:16px;border:1px solid var(--line);box-shadow:var(--shadow);overflow:hidden}
+.it,.card{-webkit-touch-callout:none}
 .it{display:flex;align-items:center;gap:12px;padding:13px 6px 13px 14px;border-bottom:1px solid var(--line);cursor:pointer;user-select:none;-webkit-user-select:none}
 .it:last-child{border-bottom:0}
 .it:active{background:rgba(140,185,230,.06)}
@@ -275,44 +276,79 @@ function render(){
   if(view.v==='list' && store.lists[view.id]) renderList(); else { view={v:'home'}; reorder=false; renderHome(); }
 }
 
+/* ---------- vetäminen: hiiri ja kosketus ---------- */
+// Kosketuksessa vierityksen estäminen vaatii, että touchmove-kuuntelija on aina olemassa (passive:false).
+let drag=null, noClickUntil=0;
+const blockClick=()=>Date.now()<noClickUntil;
+document.addEventListener('touchmove',e=>{ if(drag && e.cancelable) e.preventDefault(); },{passive:false});
+document.addEventListener('touchstart',e=>{
+  // Kuuntelijat itse kosketettuun elementtiin: ne toimivat, vaikka elementti piirretään uudelleen kesken eleen
+  const t=e.target;
+  const tm=ev=>{ if(drag){ if(ev.cancelable) ev.preventDefault(); drag.move(ev.touches[0].clientY); } };
+  const te=()=>{ t.removeEventListener('touchmove',tm); t.removeEventListener('touchend',te); t.removeEventListener('touchcancel',te); if(drag) drag.end(); };
+  t.addEventListener('touchmove',tm,{passive:false}); t.addEventListener('touchend',te); t.addEventListener('touchcancel',te);
+},{passive:true});
+window.addEventListener('pointermove',e=>{ if(drag && e.pointerType!=='touch') drag.move(e.clientY); });
+window.addEventListener('pointerup',e=>{ if(drag && e.pointerType!=='touch') drag.end(); });
+
+function dragLoop(y,el,reposition,onDrop){
+  const grab=y-el.getBoundingClientRect().top;
+  let py=y, raf=0;
+  el.classList.add('dragging'); document.body.classList.add('noselect');
+  const tick=()=>{
+    const vh=window.innerHeight, dy= py<80 ? -12 : py>vh-90 ? 12 : 0;
+    if(dy) window.scrollBy(0,dy);
+    el.style.transform=''; reposition(py);
+    const top=el.getBoundingClientRect().top; el.style.transform=`translateY(${py-grab-top}px)`;
+    raf=requestAnimationFrame(tick); };
+  drag={ move:v=>{ py=v; }, end:()=>{ if(!drag) return; drag=null; cancelAnimationFrame(raf);
+    el.style.transform=''; el.classList.remove('dragging'); document.body.classList.remove('noselect');
+    noClickUntil=Date.now()+400; onDrop(); } };
+  raf=requestAnimationFrame(tick);
+}
+// Pitkä painallus: laukeaa, kun sormi pysyy paikallaan ~0,45 s
+function onLongPress(box,sel,fire){
+  let timer=0, sx=0, sy=0, ly=0, tgt=null;
+  const cancel=()=>{ clearTimeout(timer); timer=0; };
+  box.addEventListener('pointerdown',e=>{
+    if(drag || (e.pointerType==='mouse' && e.button!==0)) return;
+    if(e.target.closest('[data-grip]')) return;
+    tgt=e.target.closest(sel); if(!tgt) return;
+    sx=e.clientX; sy=ly=e.clientY; cancel();
+    timer=setTimeout(()=>{ timer=0; noClickUntil=Date.now()+800; try{ navigator.vibrate&&navigator.vibrate(15); }catch(_){} fire(tgt,ly); },450);
+  });
+  box.addEventListener('pointermove',e=>{ ly=e.clientY; if(timer && Math.hypot(e.clientX-sx,e.clientY-sy)>10) cancel(); });
+  ['pointerup','pointercancel'].forEach(t=>box.addEventListener(t,cancel));
+  box.addEventListener('contextmenu',e=>e.preventDefault());
+}
+// Uudelleenpiirron jälkeen vieritetään niin, että painettu kohta pysyy sormen alla
+function keepUnder(el,oldTop){ if(el) window.scrollBy(0, el.getBoundingClientRect().top-oldTop); }
+
 function renderHomeReorder(ls){
   $('#app').innerHTML=`<header><div class="topbar"><div class="label">Omat listat</div><button class="btn primary" id="roDone" style="padding:9px 18px">Valmis</button></div>
     <div class="total">Järjestä</div></header>
-    <p class="rohint">Vedä listaa oikean reunan ≡-kahvasta uuteen paikkaan.</p>
+    <p class="rohint">Vedä listaa ≡-kahvasta tai painamalla sitä pitkään.</p>
     <div id="homeList">${ls.map(l=>`<div class="card" data-sort="${l.id}" style="cursor:default"><div class="grow"><div class="name">${esc(l.name)}</div></div>
       <button class="grip" data-grip aria-label="Vedä siirtääksesi">${ICON.grip}</button></div>`).join('')}</div>`;
   $('#fab').hidden=true;
   $('#roDone').onclick=()=>{ homeReorder=false; renderHome(); };
   const box=$('#homeList');
   box.addEventListener('pointerdown',e=>{
-    const g=e.target.closest('[data-grip]'); if(!g) return;
-    e.preventDefault();
-    sortDrag(e, g.closest('[data-sort]'), box, '[data-sort]', ()=>{
-      [...box.querySelectorAll('[data-sort]')].forEach((el,i)=>{ const L=store.lists[el.dataset.sort]; if(L) L.order=i+1; });
-      persist();
-    });
+    const g=e.target.closest('[data-grip]'); if(!g || drag) return;
+    e.preventDefault(); beginListDrag(g.closest('[data-sort]'), e.clientY);
   });
+  onLongPress(box,'[data-sort]',(el,y)=>beginListDrag(el,y));
 }
-// Yleinen vedettävä järjestäminen yhden tason elementeille
-function sortDrag(e,el,box,sel,onDrop){
-  const grab=e.clientY-el.getBoundingClientRect().top;
-  let py=e.clientY, raf=0, active=true;
-  el.classList.add('dragging'); document.body.classList.add('noselect');
-  const tick=()=>{ if(!active) return;
-    const vh=window.innerHeight, dy= py<80 ? -12 : py>vh-90 ? 12 : 0;
-    if(dy) window.scrollBy(0,dy);
-    el.style.transform='';
+function beginListDrag(el,y){
+  const box=$('#homeList');
+  dragLoop(y, el, py=>{
     let before=null;
-    for(const x of box.querySelectorAll(sel)){ if(x===el) continue; const r=x.getBoundingClientRect(); if(py<r.top+r.height/2){ before=x; break; } }
+    for(const x of box.querySelectorAll('[data-sort]')){ if(x===el) continue; const r=x.getBoundingClientRect(); if(py<r.top+r.height/2){ before=x; break; } }
     if(before){ if(el.nextElementSibling!==before) box.insertBefore(el,before); } else if(box.lastElementChild!==el) box.appendChild(el);
-    const top=el.getBoundingClientRect().top; el.style.transform=`translateY(${py-grab-top}px)`;
-    raf=requestAnimationFrame(tick); };
-  const move=ev=>{ py=ev.clientY; if(ev.cancelable) ev.preventDefault(); };
-  const end=()=>{ active=false; cancelAnimationFrame(raf);
-    window.removeEventListener('pointermove',move); window.removeEventListener('pointerup',end); window.removeEventListener('pointercancel',end);
-    el.style.transform=''; el.classList.remove('dragging'); document.body.classList.remove('noselect'); onDrop(); };
-  window.addEventListener('pointermove',move,{passive:false}); window.addEventListener('pointerup',end); window.addEventListener('pointercancel',end);
-  raf=requestAnimationFrame(tick);
+  }, ()=>{
+    [...box.querySelectorAll('[data-sort]')].forEach((x,i)=>{ const L=store.lists[x.dataset.sort]; if(L) L.order=i+1; });
+    persist();
+  });
 }
 
 function renderHome(){
@@ -326,18 +362,23 @@ function renderHome(){
   if(!ls.length){
     h+=`<div class="empty">Ei vielä listoja.<br>Luo uusi lista tai tuo valmis lista To Do -sovelluksesta.<br><br>Onko sinulla varmuuskopio? Tuo se oikean yläkulman ⚙-valikosta.</div>`;
   } else {
-    h+=ls.map(l=>{ const {d,t}=progress(l); const pct=t?Math.round(d/t*100):0;
+    h+='<div id="homeCards">'+ls.map(l=>{ const {d,t}=progress(l); const pct=t?Math.round(d/t*100):0;
       return `<button class="card" data-list="${l.id}"><div class="grow"><div class="name">${esc(l.name)}</div>
         <div class="sub">${t?(d===t?'Kaikki tehty':`${d} / ${t} tehty`):'Tyhjä lista'}</div>
         ${t?`<div class="mini"><span style="width:${pct}%"></span></div>`:''}</div>
-        <div class="val">${t?pct+'&nbsp;%':''}</div></button>`; }).join('');
+        <div class="val">${t?pct+'&nbsp;%':''}</div></button>`; }).join('')+'</div>';
   }
   h+=`<button class="btn addacc" id="impBtn">Tuo lista To Do:sta tai tekstistä</button>`;
   $('#app').innerHTML=h;
   $('#setBtn').onclick=openSettings;
   if($('#roHome')) $('#roHome').onclick=()=>{ homeReorder=true; renderHome(); };
   $('#impBtn').onclick=()=>openImport();
-  $$('[data-list]').forEach(b=>b.onclick=()=>{ filter='all'; go({v:'list',id:b.dataset.list}); });
+  $$('[data-list]').forEach(b=>b.onclick=()=>{ if(blockClick()) return; filter='all'; go({v:'list',id:b.dataset.list}); });
+  if($('#homeCards') && ls.length>1) onLongPress($('#homeCards'),'[data-list]',(card,y)=>{
+    const id=card.dataset.list, oldTop=card.getBoundingClientRect().top;
+    homeReorder=true; renderHome();
+    const el=document.querySelector(`[data-sort="${id}"]`); keepUnder(el,oldTop); if(el) beginListDrag(el,y);
+  });
   const fab=$('#fab'); fab.hidden=false; fab.textContent='+ Uusi lista'; fab.onclick=openNewList;
   renderBanner();
 }
@@ -399,7 +440,13 @@ function renderList(){
     };
   }
   const items=$('#items');
+  if(items) onLongPress(items,'.it',(row,y)=>{
+    const id=row.dataset.id, oldTop=row.getBoundingClientRect().top;
+    reorder=true; renderList();
+    const el=document.querySelector(`#items .it[data-id="${id}"]`); keepUnder(el,oldTop); if(el) beginItemDrag(el,y,L);
+  });
   if(items) items.addEventListener('click',e=>{
+    if(blockClick()) return;
     const m=e.target.closest('[data-more]'); if(m){ openItem(L,m.dataset.more); return; }
     const row=e.target.closest('.it'); if(!row) return;
     const id=row.dataset.id;
@@ -419,24 +466,21 @@ function renderList(){
 function renderReorder(L){
   $('#app').innerHTML=`<header><div class="topbar"><div class="label">${esc(L.name)}</div><button class="btn primary" id="roDone" style="padding:9px 18px">Valmis</button></div>
     <div class="total name">Järjestä</div></header>
-    <p class="rohint">Vedä kohtaa oikean reunan ≡-kahvasta. Pääkohta siirtyy alakohtineen. Alakohdan voi vetää myös toisen pääkohdan alle.</p>
+    <p class="rohint">Vedä kohtaa ≡-kahvasta tai painamalla sitä pitkään. Pääkohta siirtyy alakohtineen. Alakohdan voi vetää myös toisen pääkohdan alle.</p>
     <div class="items ro" id="items">${L.items.map(it=>`<div class="grp" data-g="${it.id}">${roRow(it,false)}${(it.children||[]).map(c=>roRow(c,true)).join('')}</div>`).join('')}</div>`;
   $('#fab').hidden=true;
   $('#roDone').onclick=()=>{ reorder=false; renderList(); };
-  $('#items').addEventListener('pointerdown',e=>{
-    const g=e.target.closest('[data-grip]'); if(!g) return;
-    e.preventDefault();
-    const row=g.closest('.it'), isChild=row.classList.contains('child');
-    startDrag(e, isChild?row:row.closest('.grp'), isChild, L);
-  });
-}
-function startDrag(e,el,isChild,L){
   const box=$('#items');
-  const grab=e.clientY-el.getBoundingClientRect().top;
-  let py=e.clientY, raf=0, active=true;
-  el.classList.add('dragging'); document.body.classList.add('noselect');
-  const place=()=>{ el.style.transform=''; const top=el.getBoundingClientRect().top; el.style.transform=`translateY(${py-grab-top}px)`; };
-  const reposition=()=>{
+  box.addEventListener('pointerdown',e=>{
+    const g=e.target.closest('[data-grip]'); if(!g || drag) return;
+    e.preventDefault(); beginItemDrag(g.closest('.it'), e.clientY, L);
+  });
+  onLongPress(box,'.it',(row,y)=>beginItemDrag(row,y,L));
+}
+function beginItemDrag(row,y,L){
+  const box=$('#items'), isChild=row.classList.contains('child');
+  const el=isChild?row:row.closest('.grp');
+  dragLoop(y, el, py=>{
     if(!isChild){
       let before=null;
       for(const g of box.querySelectorAll('.grp')){ if(g===el) continue; const r=g.getBoundingClientRect(); if(py<r.top+r.height/2){ before=g; break; } }
@@ -448,18 +492,7 @@ function startDrag(e,el,isChild,L){
       if(!anchor) anchor=box.querySelector('.grp>.it');
       if(anchor.nextElementSibling!==el) anchor.after(el);
     }
-  };
-  const tick=()=>{ if(!active) return;
-    const vh=window.innerHeight; const dy= py<80 ? -12 : py>vh-90 ? 12 : 0;
-    if(dy) window.scrollBy(0,dy);
-    el.style.transform=''; reposition(); place();
-    raf=requestAnimationFrame(tick); };
-  const move=ev=>{ py=ev.clientY; if(ev.cancelable) ev.preventDefault(); };
-  const end=()=>{ active=false; cancelAnimationFrame(raf);
-    window.removeEventListener('pointermove',move); window.removeEventListener('pointerup',end); window.removeEventListener('pointercancel',end);
-    el.style.transform=''; el.classList.remove('dragging'); document.body.classList.remove('noselect'); commitOrder(L); };
-  window.addEventListener('pointermove',move,{passive:false}); window.addEventListener('pointerup',end); window.addEventListener('pointercancel',end);
-  raf=requestAnimationFrame(tick);
+  }, ()=>commitOrder(L));
 }
 function commitOrder(L){
   const byId={}; for(const it of L.items){ byId[it.id]=it; for(const c of it.children||[]) byId[c.id]=c; }
@@ -542,6 +575,7 @@ function openItem(L,id){
   <p class="hint" id="iParHint" hidden>Myös sen ${kids.length} alakohtaa siirtyvät valitun pääkohdan alle.</p>
   <div class="stack">
     ${!parent?`<button class="btn" id="iSub">+ Lisää alakohta</button>`:''}
+    ${lists().length>1?`<button class="btn" id="iOther">Siirrä tai kopioi toiseen listaan</button>`:''}
     <div class="actions" style="margin:0"><button class="btn" id="iUp" ${idx===0?'disabled':''}>↑ Ylös</button><button class="btn" id="iDown" ${idx===arr.length-1?'disabled':''}>↓ Alas</button></div>
   </div>
   <div id="delConfirm"></div>
@@ -560,6 +594,7 @@ function openItem(L,id){
     $('#iSave').onclick=()=>{ saveText(); const moved=move(); commit(); closeSheet(); if(moved) setTimeout(()=>toast('Kohta siirretty'),50); };
     $('#iTxt').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); $('#iSave').click(); } });
     if($('#iSub')) $('#iSub').onclick=()=>{ saveText(); commit(); openSet.add(it.id); openAdd(L,it.id); };
+    if($('#iOther')) $('#iOther').onclick=()=>{ saveText(); commit(); openTransfer(L,it.id); };
     $('#iUp').onclick=()=>{ saveText(); if(idx>0){ arr.splice(idx-1,0,arr.splice(idx,1)[0]); commit(); } closeSheet(); };
     $('#iDown').onclick=()=>{ saveText(); if(idx<arr.length-1){ arr.splice(idx+1,0,arr.splice(idx,1)[0]); commit(); } closeSheet(); };
     $('#iDel').onclick=()=>{
@@ -567,6 +602,38 @@ function openItem(L,id){
       $('#delConfirm').innerHTML=`<div class="confirm">Poistetaanko ${esc(it.text)} ja sen ${kids.length} alakohtaa?<div class="actions"><button class="btn ghost" id="cNo">Ei</button><button class="btn danger" id="cYes">Poista</button></div></div>`;
       $('#cNo').onclick=()=>$('#delConfirm').innerHTML='';
       $('#cYes').onclick=()=>{ arr.splice(idx,1); commit(); closeSheet(); };
+    };
+  });
+}
+
+function openTransfer(L,id){
+  const f=findItem(L,id); if(!f) return;
+  const {it,arr,idx}=f, kids=it.children||[];
+  const targets=lists().filter(x=>x.id!==view.id);
+  openSheet(`<h3>Toiseen listaan</h3><p class="hint"><b>${esc(it.text)}</b>${kids.length?` ja sen ${kids.length} alakohtaa`:''}</p>
+  ${seg('tMode',[['move','Siirrä'],['copy','Kopioi']],'move')}
+  <div class="field"><label>Lista</label><select id="tList">${targets.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('')}</select></div>
+  <div class="field"><label>Paikka</label><select id="tPar"></select></div>
+  <p class="hint" id="tHint" hidden>Alakohdat tulevat samalle tasolle valitun pääkohdan alle.</p>
+  <p class="hint" id="tCopyHint" hidden>Kopio lisätään ilman merkintää. Alkuperäinen jää tähän listaan.</p>
+  <div class="actions"><button class="btn ghost" id="cancel">Peruuta</button><button class="btn primary" id="tGo">Siirrä</button></div>`,
+  ()=>{
+    let mode='move';
+    const hint=()=>{ $('#tHint').hidden=!(kids.length && $('#tPar').value); };
+    const fill=()=>{ const T=store.lists[$('#tList').value]; if(!T) return;
+      $('#tPar').innerHTML=`<option value="">Pääkohta (listan loppuun)</option>`+T.items.map(m=>`<option value="${m.id}">Alakohta: ${esc(m.text)}</option>`).join(''); hint(); };
+    bindSeg('tMode',v=>{ mode=v; $('#tGo').textContent=v==='move'?'Siirrä':'Kopioi'; $('#tCopyHint').hidden=v!=='copy'; });
+    $('#tList').onchange=fill; $('#tPar').onchange=hint; fill();
+    $('#cancel').onclick=()=>closeSheet();
+    $('#tGo').onclick=()=>{
+      const T=store.lists[$('#tList').value]; if(!T) return;
+      const pid=$('#tPar').value, copy=mode==='copy';
+      const mk=x=>({id:copy?newId():x.id, text:x.text, done:copy?false:!!x.done});
+      if(pid){ const P=T.items.find(m=>m.id===pid); if(!P) return; P.children=P.children||[]; P.children.push(mk(it),...kids.map(mk)); }
+      else T.items.push({...mk(it),children:kids.map(mk)});
+      if(!copy) arr.splice(idx,1);
+      fixParents(T); fixParents(L); T.updatedAt=L.updatedAt=Date.now(); persist();
+      closeSheet(()=>toast(`${copy?'Kopioitu':'Siirretty'} listaan ${T.name}`));
     };
   });
 }
